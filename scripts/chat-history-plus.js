@@ -24,7 +24,13 @@
 
 const MODULE_ID = "chat-history-plus";
 const MAX_HISTORY = 50;
-const PENDING_TIMEOUT_MS = 4000; // janela de tempo pra associar clique -> mensagem de chat
+// Janela de tempo pra associar "clique num poder/macro" -> "mensagem no chat".
+// Precisa ser generosa porque muitos poderes do T20 abrem o AbilityUseDialog
+// (escolher quanto PM gastar, confirmar) antes de rolar — e isso demora mais
+// que alguns segundos na prática. O trade-off: se você digitar uma rolagem
+// manual "/r ..." dentro dessa janela logo depois de clicar num poder, ela
+// pode acabar marcada (incorretamente) como pertencente àquele poder.
+const PENDING_TIMEOUT_MS = 60_000; // 60 segundos
 
 /**
  * @typedef {Object} HistoryEntry
@@ -103,7 +109,12 @@ function buildHistoryEntry(message) {
   //    É a fonte mais confiável: usamos o comando exato salvo na macro.
   if (pendingMacroClick && Date.now() - pendingMacroClick.timestamp < PENDING_TIMEOUT_MS) {
     const macro = pendingMacroClick.macro;
-    pendingMacroClick = null;
+    // Não zeramos pendingMacroClick aqui de propósito: um único clique pode
+    // gerar VÁRIAS mensagens em sequência (texto do custo + rolagem, por
+    // exemplo, quando passa por um diálogo de confirmação). Deixamos essa
+    // referência viva até expirar pelo tempo ou ser substituída por um clique
+    // novo — mensagens repetidas viram a mesma entrada graças à deduplicação
+    // de entradas consecutivas idênticas logo abaixo, em createChatMessage.
 
     if (macro.type === "script") {
       return {
@@ -127,7 +138,8 @@ function buildHistoryEntry(message) {
     const speakerActorId = message.speaker?.actor;
     if (!speakerActorId || speakerActorId === pendingItemClick.actorId) {
       const name = pendingItemClick.itemName;
-      pendingItemClick = null;
+      // mesmo motivo do bloco de macro acima: não consumimos de imediato,
+      // pra cobrir diálogos de confirmação que geram mais de uma mensagem.
       return {
         display: `game.tormenta20.rollItemMacro("${name.replace(/"/g, '\\"')}")`,
         execute: () => {

@@ -129,6 +129,23 @@ do jeito certo para cada caso (`.value` ou `.textContent`), além de logar uma
 única vez qual `<tag>` é o campo de chat de verdade, pra facilitar futuras
 depurações.
 
+## Segunda rodada de depuração: janela de tempo curta demais
+
+O clique no poder/macro estava sendo capturado certinho, mas a associação com a
+mensagem de chat expirava antes de acontecer — muitos poderes do T20 abrem o
+`AbilityUseDialog` (escolher PM, confirmar) antes de rolar, e isso facilmente
+passa dos poucos segundos que a janela original dava. A janela agora é de
+**60 segundos**, e o clique pendente não é mais "consumido" na primeira
+mensagem — fica disponível até expirar ou até um novo clique substituí-lo, o
+que cobre ações que geram várias mensagens em sequência (texto do custo +
+rolagem, por exemplo).
+
+**Trade-off consciente:** se você digitar uma rolagem manual (`/r ...`) na
+janela de 60s logo depois de clicar num poder do mesmo personagem, ela pode
+acabar marcada (errado) como pertencente àquele poder. Na prática isso deve
+ser raro; se incomodar, dá pra reduzir `PENDING_TIMEOUT_MS` no topo do
+arquivo.
+
 ## Versão
 
 1.0.0 — repositório: https://github.com/keitan-lend/chat-history-plus
