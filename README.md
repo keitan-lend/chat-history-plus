@@ -50,11 +50,26 @@ precisa fazer nada além de garantir que ele está habilitado.)
 
 ## Instalação
 
+### Opção A — pela Manifest URL (recomendado, permite atualização automática)
+
+1. Garanta que o **libWrapper** está instalado e ativo (veja acima).
+2. Na tela de Setup do Foundry, vá em **Add-on Modules → Install Module**.
+3. Cole no campo "Manifest URL":
+   `https://github.com/keitan-lend/chat-history-plus/releases/latest/download/module.json`
+4. Clique em "Install".
+5. Ative **Chat History Plus** em **Configurações do Mundo → Gerenciar Módulos**.
+
+### Opção B — manual (extraindo o zip)
+
 1. Extraia este zip em `Data/modules/chat-history-plus/` (a pasta precisa se chamar
    exatamente `chat-history-plus`, igual ao `id` do `module.json`).
 2. Garanta que o **libWrapper** está instalado e ativo (veja acima).
 3. Reinicie o Foundry ou clique em "Refresh Packages" na tela de setup.
 4. Ative **Chat History Plus** em **Configurações do Mundo → Gerenciar Módulos**.
+
+> A Opção A só funciona depois que a Release `v1.0.0` (com os arquivos `module.json` e
+> `chat-history-plus.zip` anexados) for publicada no repositório. Antes disso, use a
+> Opção B com o zip baixado diretamente.
 
 ## Limitações conhecidas / pontos a validar
 
