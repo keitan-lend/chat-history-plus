@@ -111,6 +111,24 @@ aba "Console"). Com o console aberto:
    nenhum dos casos tratados em `buildHistoryEntry` — me manda o print do console
    nesse ponto que eu ajusto.
 
+## Histórico de depuração
+
+Na primeira rodada de testes, o clique na ficha **já estava sendo capturado
+corretamente** (confirmado pelo log `adicionado ao histórico: ...`), mas nada
+aparecia visualmente ao apertar a seta pra cima. A causa real era esta:
+
+```
+Uncaught TypeError: el.setSelectionRange is not a function
+```
+
+O campo de chat do Foundry, nessa versão, não é um `<textarea>` comum — então
+`el.value = texto` não tinha efeito nenhum (o JS aceita a atribuição sem erro,
+só que sem efeito visual em um elemento que não seja `<textarea>`/`<input>`).
+O código agora detecta o tipo real do campo (`isFormField`) e escreve o texto
+do jeito certo para cada caso (`.value` ou `.textContent`), além de logar uma
+única vez qual `<tag>` é o campo de chat de verdade, pra facilitar futuras
+depurações.
+
 ## Versão
 
 1.0.0 — repositório: https://github.com/keitan-lend/chat-history-plus

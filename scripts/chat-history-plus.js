@@ -48,10 +48,53 @@ let pendingItemClick = null; // { actorId, itemName, timestamp }
 /** última macro executada (hotbar, diretório de macros, etc.), aguardando a ChatMessage confirmar */
 let pendingMacroClick = null; // { macro, timestamp }
 
+/** garante que só logamos o tipo do campo de chat uma vez, não a cada tecla */
+let hasLoggedFieldType = false;
+
 function stripHtml(html) {
   const div = document.createElement("div");
   div.innerHTML = html ?? "";
   return (div.textContent ?? "").trim();
+}
+
+/** true se `el` for um <textarea>/<input> de verdade (tem .value funcional) */
+function isFormField(el) {
+  return el?.tagName === "TEXTAREA" || el?.tagName === "INPUT";
+}
+
+/** Lê o texto atual do campo de chat, seja ele <textarea> ou contenteditable. */
+function readFieldText(el) {
+  return isFormField(el) ? el.value : (el.textContent ?? "");
+}
+
+/**
+ * Escreve texto no campo de chat, seja ele <textarea> ou contenteditable, e
+ * dispara um evento "input" pra qualquer listener interno do Foundry que
+ * dependa dele para saber que o conteúdo mudou.
+ */
+function writeFieldText(el, text) {
+  if (isFormField(el)) {
+    el.value = text;
+  } else {
+    el.textContent = text;
+  }
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+/** Move o cursor para o final do campo, seja ele <textarea> ou contenteditable. */
+function moveCursorToEnd(el) {
+  if (isFormField(el)) {
+    if (typeof el.setSelectionRange === "function") {
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 /** Constrói a entrada de histórico certa para uma ChatMessage recém-criada. */
@@ -205,26 +248,34 @@ Hooks.on("createChatMessage", (message) => {
 Hooks.on("chatInput", (event, options) => {
   const el = event.target;
 
+  if (!hasLoggedFieldType) {
+    hasLoggedFieldType = true;
+    console.debug(
+      `${MODULE_ID} | campo de chat detectado: <${el.tagName?.toLowerCase()}>`,
+      isFormField(el) ? "(textarea/input padrão)" : "(NÃO é textarea/input — tratado como contenteditable)"
+    );
+  }
+
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
     if (history.length === 0) return;
 
     if (event.key === "ArrowUp") {
-      if (pointer === history.length) pendingDraft = el.value;
+      if (pointer === history.length) pendingDraft = readFieldText(el);
       if (pointer > 0) {
         pointer -= 1;
-        el.value = history[pointer].display;
+        writeFieldText(el, history[pointer].display);
       }
     } else {
       if (pointer < history.length - 1) {
         pointer += 1;
-        el.value = history[pointer].display;
+        writeFieldText(el, history[pointer].display);
       } else if (pointer === history.length - 1) {
         pointer = history.length;
-        el.value = pendingDraft;
+        writeFieldText(el, pendingDraft);
       }
     }
 
-    requestAnimationFrame(() => el.setSelectionRange(el.value.length, el.value.length));
+    requestAnimationFrame(() => moveCursorToEnd(el));
     if (options) options.recordPending = false;
     event.preventDefault();
     return false;
@@ -234,9 +285,9 @@ Hooks.on("chatInput", (event, options) => {
     const current = history[pointer];
     // só executa a macro se o texto não foi editado — senão deixa virar
     // uma mensagem/comando normal de chat.
-    if (current?.execute && el.value === current.display) {
+    if (current?.execute && readFieldText(el) === current.display) {
       current.execute();
-      el.value = "";
+      writeFieldText(el, "");
       pointer = history.length;
       pendingDraft = "";
       event.preventDefault();
