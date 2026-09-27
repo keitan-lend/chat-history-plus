@@ -74,14 +74,42 @@ precisa fazer nada além de garantir que ele está habilitado.)
 ## Limitações conhecidas / pontos a validar
 
 - A captura por clique na ficha (item 2) depende do elemento ter o atributo
-  `data-item-id` — convenção comum no Foundry, mas não garantida pela ficha do T20 em
-  todas as versões. Se não funcionar, inspecione o elemento (F12 → botão direito →
-  Inspecionar) e ajuste `scripts/chat-history-plus.js`.
+  `data-item-id` num ancestral — é assim que o sistema **Tormenta20 base** (v1.6.3)
+  marca cada item na lista (confirmado direto no código-fonte,
+  `templates/actor/parts/lists/*.hbs` + `module/sheets/actor-base.mjs`). **Se você usa
+  um módulo de ficha alternativa** (ex: *Tormenta20: Ficha Heroica*), ele pode usar uma
+  estrutura HTML própria, com outro nome de atributo — nesse caso a captura por clique
+  na ficha não vai funcionar até ajustarmos o seletor para a marcação real dessa ficha.
 - A interceptação do Enter assume que o hook `chatInput` do Foundry dispara também para
   essa tecla (a documentação oficial não deixa isso 100% explícito). Se o Enter só
   reenviar o texto como mensagem em vez de executar a macro, essa é a causa mais provável.
-- Testado nominalmente contra Foundry v14.365 / Tormenta20 v1.6.2. Pode precisar de
+- Testado nominalmente contra Foundry v14.365 / Tormenta20 v1.6.3. Pode precisar de
   ajustes em outras versões.
+
+## Como diagnosticar se algo não funcionar
+
+O módulo grava mensagens de diagnóstico no console do navegador (tecla **F12** →
+aba "Console"). Com o console aberto:
+
+1. **Clique num poder/magia na ficha.** Deve aparecer uma destas linhas:
+   - `chat-history-plus | clique capturado: item "Nome" do ator "..."` → capturou certo,
+     o problema está em outra etapa.
+   - `chat-history-plus | clique na ficha ignorado (elemento sem data-item-id em
+     nenhum ancestral)` → a ficha que você usa (provavelmente um módulo de ficha
+     alternativa) não usa `data-item-id`. Copie o HTML do elemento clicado (F12 →
+     botão direito no nome do poder → Inspecionar) e ajuste o seletor no código.
+   - Nenhuma linha aparece → o listener nem foi anexado a essa ficha (confira se
+     apareceu a linha `ouvindo cliques na ficha de "..."` quando você abriu a ficha;
+     se não apareceu, feche e reabra a ficha depois de ativar o módulo).
+2. **Clique num slot da hotbar.** Deve aparecer:
+   `chat-history-plus | macro executada: "Nome" (tipo: script)`. Se não aparecer,
+   confira se o libWrapper está mesmo ativo (**Configurações do Mundo → Gerenciar
+   Módulos**).
+3. Depois de qualquer rolagem, deve aparecer:
+   `chat-history-plus | adicionado ao histórico: <comando> (executável)` ou
+   `(texto)`. Se a rolagem some sem essa linha aparecer, ela não está batendo com
+   nenhum dos casos tratados em `buildHistoryEntry` — me manda o print do console
+   nesse ponto que eu ajusto.
 
 ## Versão
 

@@ -131,6 +131,7 @@ Hooks.once("setup", () => {
     MODULE_ID,
     "Macro.prototype.execute",
     function (wrapped, ...args) {
+      console.debug(`${MODULE_ID} | macro executada: "${this.name}" (tipo: ${this.type})`);
       pendingMacroClick = { macro: this, timestamp: Date.now() };
       return wrapped(...args);
     },
@@ -141,18 +142,37 @@ Hooks.once("setup", () => {
 // Captura cliques em itens (poderes, magias, perícias, armas) em qualquer
 // ficha de ator aberta. `data-item-id` é a convenção padrão do Foundry para
 // vincular um elemento clicável da ficha ao Item correspondente.
-Hooks.on("renderActorSheet", (app, html) => {
+//
+// IMPORTANTE: usamos "renderApplication" (que dispara pra QUALQUER
+// Application, de qualquer classe) em vez de "renderActorSheet", porque
+// módulos de ficha alternativa (ex: Ficha Heroica) registram sua própria
+// classe de Application — "renderActorSheet" só dispara garantidamente se
+// essa classe realmente estender ActorSheet na cadeia de herança, então
+// "renderApplication" + checar app.actor é a forma mais à prova de módulo
+// de pegar qualquer ficha, seja qual for a classe por trás dela.
+Hooks.on("renderApplication", (app, html) => {
+  if (!app?.actor) return; // só nos interessam fichas de ator (personagem, NPC, etc.)
+
   const root = html?.jquery ? html[0] : html;
   if (!root || root.dataset.chatHistoryPlusBound) return;
   root.dataset.chatHistoryPlusBound = "1";
+
+  console.debug(`${MODULE_ID} | ouvindo cliques na ficha de "${app.actor.name}" (classe: ${app.constructor.name})`);
 
   root.addEventListener(
     "click",
     (event) => {
       const el = event.target.closest?.("[data-item-id]");
-      if (!el) return;
+      if (!el) {
+        console.debug(`${MODULE_ID} | clique na ficha ignorado (elemento sem data-item-id em nenhum ancestral)`, event.target);
+        return;
+      }
       const item = app.actor?.items?.get(el.dataset.itemId);
-      if (!item) return;
+      if (!item) {
+        console.debug(`${MODULE_ID} | data-item-id="${el.dataset.itemId}" encontrado, mas nenhum item correspondente no ator`);
+        return;
+      }
+      console.debug(`${MODULE_ID} | clique capturado: item "${item.name}" do ator "${app.actor.name}"`);
       pendingItemClick = { actorId: app.actor.id, itemName: item.name, timestamp: Date.now() };
     },
     true // capture phase: garante que a gente vê o clique mesmo se a ficha parar a propagação
@@ -167,6 +187,7 @@ Hooks.on("createChatMessage", (message) => {
 
   const entry = buildHistoryEntry(message);
   if (!entry) return;
+  console.debug(`${MODULE_ID} | adicionado ao histórico:`, entry.display, entry.execute ? "(executável)" : "(texto)");
 
   const last = history[history.length - 1];
   if (last && last.display === entry.display) {
