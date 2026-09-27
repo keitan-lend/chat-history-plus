@@ -198,39 +198,49 @@ Hooks.once("setup", () => {
 // ficha de ator aberta. `data-item-id` é a convenção padrão do Foundry para
 // vincular um elemento clicável da ficha ao Item correspondente.
 //
-// IMPORTANTE: usamos "renderApplication" (que dispara pra QUALQUER
-// Application, de qualquer classe) em vez de "renderActorSheet", porque
-// módulos de ficha alternativa (ex: Ficha Heroica) registram sua própria
-// classe de Application — "renderActorSheet" só dispara garantidamente se
-// essa classe realmente estender ActorSheet na cadeia de herança, então
-// "renderApplication" + checar app.actor é a forma mais à prova de módulo
-// de pegar qualquer ficha, seja qual for a classe por trás dela.
-Hooks.on("renderApplication", (app, html) => {
-  if (!app?.actor) return; // só nos interessam fichas de ator (personagem, NPC, etc.)
+// IMPORTANTE: em vez de esperar um hook "render..." disparar (renderApplication
+// e renderActorSheet não estavam disparando nos testes — motivo ainda não
+// confirmado, possivelmente específico do Foundry v14 desse mundo), usamos um
+// único listener fixado direto em `document`, ativo desde o carregamento do
+// mundo. Pra descobrir a QUAL ator pertence o clique, procuramos entre as
+// janelas abertas do Foundry (`ui.windows`) qual delas contém o elemento
+// clicado e tem um `.actor` — isso não depende de hook nenhum disparar certo.
+function findActorSheetApp(target) {
+  for (const app of Object.values(ui.windows)) {
+    if (!app?.actor) continue;
+    const root = app.element?.jquery ? app.element[0] : app.element;
+    if (root?.contains?.(target)) return app;
+  }
+  return null;
+}
 
-  const root = html?.jquery ? html[0] : html;
-  if (!root || root.dataset.chatHistoryPlusBound) return;
-  root.dataset.chatHistoryPlusBound = "1";
+Hooks.once("ready", () => {
+  console.log(`${MODULE_ID} | escutando cliques em itens de fichas de ator (via ui.windows, independente de hooks de render)`);
 
-  console.debug(`${MODULE_ID} | ouvindo cliques na ficha de "${app.actor.name}" (classe: ${app.constructor.name})`);
-
-  root.addEventListener(
+  document.addEventListener(
     "click",
     (event) => {
       const el = event.target.closest?.("[data-item-id]");
-      if (!el) {
-        console.debug(`${MODULE_ID} | clique na ficha ignorado (elemento sem data-item-id em nenhum ancestral)`, event.target);
+      if (!el) return; // clique fora de qualquer item — nada a fazer aqui
+
+      const app = findActorSheetApp(event.target);
+      if (!app) {
+        console.debug(`${MODULE_ID} | clique em [data-item-id] fora de uma ficha de ator conhecida (ui.windows)`, el);
         return;
       }
+
       const item = app.actor?.items?.get(el.dataset.itemId);
       if (!item) {
-        console.debug(`${MODULE_ID} | data-item-id="${el.dataset.itemId}" encontrado, mas nenhum item correspondente no ator`);
+        console.debug(
+          `${MODULE_ID} | data-item-id="${el.dataset.itemId}" não encontrado nos itens de "${app.actor?.name}"`
+        );
         return;
       }
+
       console.debug(`${MODULE_ID} | clique capturado: item "${item.name}" do ator "${app.actor.name}"`);
       pendingItemClick = { actorId: app.actor.id, itemName: item.name, timestamp: Date.now() };
     },
-    true // capture phase: garante que a gente vê o clique mesmo se a ficha parar a propagação
+    true // capture phase: garante que a gente vê o clique mesmo se algo parar a propagação depois
   );
 });
 

@@ -146,6 +146,25 @@ acabar marcada (errado) como pertencente àquele poder. Na prática isso deve
 ser raro; se incomodar, dá pra reduzir `PENDING_TIMEOUT_MS` no topo do
 arquivo.
 
+## Terceira rodada de depuração: o hook de renderização nunca disparava
+
+Depois da correção da janela de tempo, o clique na ficha continuava caindo no
+modo "só a fórmula" (`/r 1d20 + 5 + 0`), mesmo pra um ataque de arma resolvido
+na hora (sem diálogo demorado). O log confirmou: nenhuma das mensagens de
+diagnóstico ligadas a `Hooks.on("renderApplication", ...)` — nem "ouvindo
+cliques na ficha", nem "clique capturado"/"clique ignorado" — jamais apareceu,
+mesmo com o clique visivelmente vindo do `_onItemRoll` da ficha (visível no
+próprio stack trace do erro de depreciação do Foundry). Ou seja: o hook de
+renderização simplesmente não estava disparando pra essa ficha, por um motivo
+que não deu pra confirmar só lendo código-fonte.
+
+A solução foi parar de depender de qualquer hook `render*` : agora um único
+listener de clique é registrado direto no `document` assim que o mundo carrega
+(`Hooks.once("ready", ...)`), e a ficha dona do clique é encontrada varrendo o
+registro `ui.windows` do próprio Foundry (todas as janelas abertas) até achar
+uma que contenha o elemento clicado e tenha um `.actor`. Isso não depende de
+nenhum hook de renderização disparar — só do clique acontecer.
+
 ## Versão
 
 1.0.0 — repositório: https://github.com/keitan-lend/chat-history-plus
