@@ -83,7 +83,7 @@ precisa fazer nada além de garantir que ele está habilitado.)
 - A interceptação do Enter assume que o hook `chatInput` do Foundry dispara também para
   essa tecla (a documentação oficial não deixa isso 100% explícito). Se o Enter só
   reenviar o texto como mensagem em vez de executar a macro, essa é a causa mais provável.
-- Testado nominalmente contra Foundry v14.365 / Tormenta20 v1.6.3. Pode precisar de
+- Testado contra Foundry v14 build 368 / Tormenta20 v1.6.3. Pode precisar de
   ajustes em outras versões.
 
 ## Como diagnosticar se algo não funcionar
@@ -164,6 +164,23 @@ listener de clique é registrado direto no `document` assim que o mundo carrega
 registro `ui.windows` do próprio Foundry (todas as janelas abertas) até achar
 uma que contenha o elemento clicado e tenha um `.actor`. Isso não depende de
 nenhum hook de renderização disparar — só do clique acontecer.
+
+## Quarta rodada: bug do `rollItemMacro` no Tormenta20 1.6.3
+
+Ao apertar Enter sobre o comando recuperado, aparecia:
+`Cannot read properties of undefined (reading 'shiftKey')` em `ItemT20.roll`.
+
+Causa (no sistema, não no módulo): `item.roll({ ..., event, ... })` declara
+`event` como parâmetro próprio (que esconde o `window.event` global), mas
+`game.tormenta20.rollItemMacro()` nunca repassa `event` nesse objeto. Para
+qualquer item com rolagens ou efeitos de uso, a linha
+`configureDialog = hasEffectsOrRolls && (... event.shiftKey ...)` quebra —
+provavelmente também num clique real na hotbar.
+
+Contorno: o módulo agora chama `item.roll({ event: { shiftKey: false, ... } })`
+diretamente (achando o item pelo nome no ator), em vez de `rollItemMacro`.
+Macros que não são do tipo `rollItemMacro("...")` continuam rodando via
+`macro.execute()`.
 
 ## Versão
 

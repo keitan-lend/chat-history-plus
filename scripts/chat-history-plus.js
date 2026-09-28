@@ -57,6 +57,51 @@ let pendingMacroClick = null; // { macro, timestamp }
 /** garante que só logamos o tipo do campo de chat uma vez, não a cada tecla */
 let hasLoggedFieldType = false;
 
+/**
+ * Evento "falso" equivalente a um clique normal (sem shift/ctrl/alt).
+ * Necessário porque, na v1.6.3 do Tormenta20, `game.tormenta20.rollItemMacro()`
+ * não repassa `event` pra dentro de `item.roll({ event, ... })` — e `item.roll`
+ * declara `event` como parâmetro próprio (não cai no `window.event` global).
+ * Resultado: QUALQUER chamada a rollItemMacro para um item com rolagens ou
+ * efeitos de uso quebra com "Cannot read properties of undefined (reading
+ * 'shiftKey')" — inclusive num clique real na hotbar, sem nosso módulo no
+ * meio. Contornamos chamando item.roll() nós mesmos, com esse evento falso.
+ */
+const FAKE_EVENT = { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, type: "click" };
+
+/** Acha um ator pelo id, cobrindo também atores de token não vinculados. */
+function resolveActorById(actorId) {
+  return (
+    game.actors.get(actorId)
+    ?? canvas?.tokens?.placeables?.find((t) => t.actor?.id === actorId)?.actor
+    ?? null
+  );
+}
+
+/**
+ * Refaz a rolagem de um item pelo nome, chamando item.roll() diretamente
+ * (contornando o bug do rollItemMacro descrito acima em FAKE_EVENT).
+ */
+function rollItemByName(actorId, itemName) {
+  const actor = resolveActorById(actorId);
+  if (!actor) {
+    ui.notifications?.warn(`chat-history-plus: não encontrei o personagem pra refazer "${itemName}".`);
+    return;
+  }
+  const item = actor.items.find((i) => i.name === itemName);
+  if (!item) {
+    ui.notifications?.warn(`O personagem "${actor.name}" não possui um item chamado "${itemName}".`);
+    return;
+  }
+  return item.roll({ event: FAKE_EVENT });
+}
+
+/** Extrai o nome do item de um comando gerado por rollItemMacro("Nome"). */
+function extractItemNameFromMacroCommand(command) {
+  const match = /rollItemMacro\(\s*["'](.+?)["']/.exec(command ?? "");
+  return match?.[1] ?? null;
+}
+
 function stripHtml(html) {
   const div = document.createElement("div");
   div.innerHTML = html ?? "";
@@ -117,14 +162,26 @@ function buildHistoryEntry(message) {
     // de entradas consecutivas idênticas logo abaixo, em createChatMessage.
 
     if (macro.type === "script") {
+      // Se o comando é do tipo rollItemMacro("Nome"), contornamos o bug do
+      // sistema (ver FAKE_EVENT) chamando item.roll() nós mesmos, usando o
+      // ator que falou na mensagem. Qualquer outra macro roda normalmente.
+      const itemName = extractItemNameFromMacroCommand(macro.command);
+      const actorId = message.speaker?.actor ?? null;
       return {
         display: macro.command,
         execute: () => {
-          try {
-            macro.execute();
-          } catch (err) {
+          const onError = (err) => {
             console.error(`${MODULE_ID} | falha ao reexecutar a macro "${macro.name}"`, err);
             ui.notifications?.error(`Não consegui refazer "${macro.name}" — veja o console (F12).`);
+          };
+          try {
+            if (itemName && actorId) {
+              Promise.resolve(rollItemByName(actorId, itemName)).catch(onError);
+            } else {
+              macro.execute();
+            }
+          } catch (err) {
+            onError(err);
           }
         },
       };
@@ -138,16 +195,22 @@ function buildHistoryEntry(message) {
     const speakerActorId = message.speaker?.actor;
     if (!speakerActorId || speakerActorId === pendingItemClick.actorId) {
       const name = pendingItemClick.itemName;
+      const actorId = pendingItemClick.actorId;
       // mesmo motivo do bloco de macro acima: não consumimos de imediato,
       // pra cobrir diálogos de confirmação que geram mais de uma mensagem.
       return {
         display: `game.tormenta20.rollItemMacro("${name.replace(/"/g, '\\"')}")`,
         execute: () => {
-          try {
-            game.tormenta20.rollItemMacro(name);
-          } catch (err) {
+          const onError = (err) => {
             console.error(`${MODULE_ID} | falha ao refazer o item "${name}"`, err);
             ui.notifications?.error(`Não consegui refazer "${name}" — veja o console (F12).`);
+          };
+          try {
+            // item.roll() direto, com evento falso (ver FAKE_EVENT), em vez de
+            // game.tormenta20.rollItemMacro, que quebra na v1.6.3 do sistema.
+            Promise.resolve(rollItemByName(actorId, name)).catch(onError);
+          } catch (err) {
+            onError(err);
           }
         },
       };

@@ -4,8 +4,8 @@
   "description": "Recall ANY chat message with the Up/Down arrow keys — including full item/power/spell rolls, whether triggered from the character sheet or from a hotbar macro. Requires libWrapper. Built for Tormenta20.",
   "version": "1.0.0",
   "compatibility": {
-    "minimum": "12",
-    "verified": "14.365"
+    "minimum": "14",
+    "verified": "14.368"
   },
   "relationships": {
     "requires": [
@@ -25,7 +25,9 @@
     "scripts/chat-history-plus.js"
   ],
   "authors": [
-    { "name": "Lucas Henrique Muniz" }
+    {
+      "name": "Lucas Henrique Muniz"
+    }
   ],
   "url": "https://github.com/keitan-lend/chat-history-plus",
   "manifest": "https://github.com/keitan-lend/chat-history-plus/releases/latest/download/module.json",
