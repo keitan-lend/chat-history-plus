@@ -55,7 +55,8 @@ precisa fazer nada além de garantir que ele está habilitado.)
 1. Garanta que o **libWrapper** está instalado e ativo (veja acima).
 2. Na tela de Setup do Foundry, vá em **Add-on Modules → Install Module**.
 3. Cole no campo "Manifest URL":
-   `https://github.com/keitan-lend/chat-history-plus/releases/latest/download/module.json`
+
+`https://github.com/keitan-lend/chat-history-plus/releases/latest/download/module.json`
 4. Clique em "Install".
 5. Ative **Chat History Plus** em **Configurações do Mundo → Gerenciar Módulos**.
 
@@ -70,21 +71,6 @@ precisa fazer nada além de garantir que ele está habilitado.)
 > A Opção A só funciona depois que a Release `v1.0.0` (com os arquivos `module.json` e
 > `chat-history-plus.zip` anexados) for publicada no repositório. Antes disso, use a
 > Opção B com o zip baixado diretamente.
-
-## Limitações conhecidas / pontos a validar
-
-- A captura por clique na ficha (item 2) depende do elemento ter o atributo
-  `data-item-id` num ancestral — é assim que o sistema **Tormenta20 base** (v1.6.3)
-  marca cada item na lista (confirmado direto no código-fonte,
-  `templates/actor/parts/lists/*.hbs` + `module/sheets/actor-base.mjs`). **Se você usa
-  um módulo de ficha alternativa** (ex: *Tormenta20: Ficha Heroica*), ele pode usar uma
-  estrutura HTML própria, com outro nome de atributo — nesse caso a captura por clique
-  na ficha não vai funcionar até ajustarmos o seletor para a marcação real dessa ficha.
-- A interceptação do Enter assume que o hook `chatInput` do Foundry dispara também para
-  essa tecla (a documentação oficial não deixa isso 100% explícito). Se o Enter só
-  reenviar o texto como mensagem em vez de executar a macro, essa é a causa mais provável.
-- Testado contra Foundry v14 build 368 / Tormenta20 v1.6.3 e 1.6.4. Pode precisar de
-  ajustes em outras versões.
 
 ## Como diagnosticar se algo não funcionar
 
@@ -110,89 +96,6 @@ aba "Console"). Com o console aberto:
    `(texto)`. Se a rolagem some sem essa linha aparecer, ela não está batendo com
    nenhum dos casos tratados em `buildHistoryEntry` — me manda o print do console
    nesse ponto que eu ajusto.
-
-## Histórico de depuração
-
-Na primeira rodada de testes, o clique na ficha **já estava sendo capturado
-corretamente** (confirmado pelo log `adicionado ao histórico: ...`), mas nada
-aparecia visualmente ao apertar a seta pra cima. A causa real era esta:
-
-```
-Uncaught TypeError: el.setSelectionRange is not a function
-```
-
-O campo de chat do Foundry, nessa versão, não é um `<textarea>` comum — então
-`el.value = texto` não tinha efeito nenhum (o JS aceita a atribuição sem erro,
-só que sem efeito visual em um elemento que não seja `<textarea>`/`<input>`).
-O código agora detecta o tipo real do campo (`isFormField`) e escreve o texto
-do jeito certo para cada caso (`.value` ou `.textContent`), além de logar uma
-única vez qual `<tag>` é o campo de chat de verdade, pra facilitar futuras
-depurações.
-
-## Segunda rodada de depuração: janela de tempo curta demais
-
-O clique no poder/macro estava sendo capturado certinho, mas a associação com a
-mensagem de chat expirava antes de acontecer — muitos poderes do T20 abrem o
-`AbilityUseDialog` (escolher PM, confirmar) antes de rolar, e isso facilmente
-passa dos poucos segundos que a janela original dava. A janela agora é de
-**60 segundos**, e o clique pendente não é mais "consumido" na primeira
-mensagem — fica disponível até expirar ou até um novo clique substituí-lo, o
-que cobre ações que geram várias mensagens em sequência (texto do custo +
-rolagem, por exemplo).
-
-**Trade-off consciente:** se você digitar uma rolagem manual (`/r ...`) na
-janela de 60s logo depois de clicar num poder do mesmo personagem, ela pode
-acabar marcada (errado) como pertencente àquele poder. Na prática isso deve
-ser raro; se incomodar, dá pra reduzir `PENDING_TIMEOUT_MS` no topo do
-arquivo.
-
-## Terceira rodada de depuração: o hook de renderização nunca disparava
-
-Depois da correção da janela de tempo, o clique na ficha continuava caindo no
-modo "só a fórmula" (`/r 1d20 + 5 + 0`), mesmo pra um ataque de arma resolvido
-na hora (sem diálogo demorado). O log confirmou: nenhuma das mensagens de
-diagnóstico ligadas a `Hooks.on("renderApplication", ...)` — nem "ouvindo
-cliques na ficha", nem "clique capturado"/"clique ignorado" — jamais apareceu,
-mesmo com o clique visivelmente vindo do `_onItemRoll` da ficha (visível no
-próprio stack trace do erro de depreciação do Foundry). Ou seja: o hook de
-renderização simplesmente não estava disparando pra essa ficha, por um motivo
-que não deu pra confirmar só lendo código-fonte.
-
-A solução foi parar de depender de qualquer hook `render*` : agora um único
-listener de clique é registrado direto no `document` assim que o mundo carrega
-(`Hooks.once("ready", ...)`), e a ficha dona do clique é encontrada varrendo o
-registro `ui.windows` do próprio Foundry (todas as janelas abertas) até achar
-uma que contenha o elemento clicado e tenha um `.actor`. Isso não depende de
-nenhum hook de renderização disparar — só do clique acontecer.
-
-## Quarta rodada: bug do `rollItemMacro` no Tormenta20 1.6.3
-
-Ao apertar Enter sobre o comando recuperado, aparecia:
-`Cannot read properties of undefined (reading 'shiftKey')` em `ItemT20.roll`.
-
-Causa (no sistema, não no módulo): `item.roll({ ..., event, ... })` declara
-`event` como parâmetro próprio (que esconde o `window.event` global), mas
-`game.tormenta20.rollItemMacro()` nunca repassa `event` nesse objeto. Para
-qualquer item com rolagens ou efeitos de uso, a linha
-`configureDialog = hasEffectsOrRolls && (... event.shiftKey ...)` quebra —
-provavelmente também num clique real na hotbar.
-
-Contorno: o módulo agora chama `item.roll({ event: { shiftKey: false, ... } })`
-diretamente (achando o item pelo nome no ator), em vez de `rollItemMacro`.
-Macros que não são do tipo `rollItemMacro("...")` continuam rodando via
-`macro.execute()`.
-
-## Quinta rodada: o popup de opções do poder não aparecia
-
-Depois do contorno do `shiftKey`, o poder era refeito, mas o popup
-(`AbilityUseDialog`) não aparecia. Hipótese (não reproduzida em ambiente
-real): o diálogo tem `default: "use"` e aceita Enter no `document`; como a
-reexecução acontecia dentro do próprio keydown do Enter, o diálogo abria e
-recebia o mesmo Enter, confirmando sozinho com os valores padrão. Agora a
-reexecução espera o Enter ser solto (`runAfterEnterReleased`).
-
-Nota: o Tormenta20 1.6.4 só corrige a criação de efeitos; o bug do
-`rollItemMacro` continua lá, então o contorno segue necessário.
 
 ## Versão
 
