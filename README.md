@@ -83,7 +83,7 @@ precisa fazer nada além de garantir que ele está habilitado.)
 - A interceptação do Enter assume que o hook `chatInput` do Foundry dispara também para
   essa tecla (a documentação oficial não deixa isso 100% explícito). Se o Enter só
   reenviar o texto como mensagem em vez de executar a macro, essa é a causa mais provável.
-- Testado contra Foundry v14 build 368 / Tormenta20 v1.6.3. Pode precisar de
+- Testado contra Foundry v14 build 368 / Tormenta20 v1.6.3 e 1.6.4. Pode precisar de
   ajustes em outras versões.
 
 ## Como diagnosticar se algo não funcionar
@@ -181,6 +181,18 @@ Contorno: o módulo agora chama `item.roll({ event: { shiftKey: false, ... } })`
 diretamente (achando o item pelo nome no ator), em vez de `rollItemMacro`.
 Macros que não são do tipo `rollItemMacro("...")` continuam rodando via
 `macro.execute()`.
+
+## Quinta rodada: o popup de opções do poder não aparecia
+
+Depois do contorno do `shiftKey`, o poder era refeito, mas o popup
+(`AbilityUseDialog`) não aparecia. Hipótese (não reproduzida em ambiente
+real): o diálogo tem `default: "use"` e aceita Enter no `document`; como a
+reexecução acontecia dentro do próprio keydown do Enter, o diálogo abria e
+recebia o mesmo Enter, confirmando sozinho com os valores padrão. Agora a
+reexecução espera o Enter ser solto (`runAfterEnterReleased`).
+
+Nota: o Tormenta20 1.6.4 só corrige a criação de efeitos; o bug do
+`rollItemMacro` continua lá, então o contorno segue necessário.
 
 ## Versão
 

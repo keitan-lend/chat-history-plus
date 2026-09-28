@@ -96,6 +96,33 @@ function rollItemByName(actorId, itemName) {
   return item.roll({ event: FAKE_EVENT });
 }
 
+/**
+ * Roda `fn` só depois que o Enter foi solto (ou após 400 ms, o que vier antes).
+ *
+ * Por quê: o AbilityUseDialog do T20 tem `default: "use"`, e o Dialog do
+ * Foundry aceita o botão padrão com Enter, escutando `keydown` no document.
+ * Se reexecutarmos o poder DENTRO do keydown do Enter, o diálogo pode abrir
+ * (o template já está em cache, então tudo resolve em microtasks) enquanto o
+ * MESMO evento ainda sobe até o document — e ele se confirma sozinho com os
+ * valores padrão, sem nunca aparecer. Adiando, o Enter já terminou.
+ */
+function runAfterEnterReleased(fn) {
+  let done = false;
+  let timer = null;
+  const run = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    document.removeEventListener("keyup", onKeyUp, true);
+    fn();
+  };
+  const onKeyUp = (e) => {
+    if (e.key === "Enter") setTimeout(run, 0);
+  };
+  document.addEventListener("keyup", onKeyUp, true);
+  timer = setTimeout(run, 400);
+}
+
 /** Extrai o nome do item de um comando gerado por rollItemMacro("Nome"). */
 function extractItemNameFromMacroCommand(command) {
   const match = /rollItemMacro\(\s*["'](.+?)["']/.exec(command ?? "");
@@ -371,7 +398,7 @@ Hooks.on("chatInput", (event, options) => {
     // só executa a macro se o texto não foi editado — senão deixa virar
     // uma mensagem/comando normal de chat.
     if (current?.execute && readFieldText(el) === current.display) {
-      current.execute();
+      runAfterEnterReleased(current.execute);
       writeFieldText(el, "");
       pointer = history.length;
       pendingDraft = "";
