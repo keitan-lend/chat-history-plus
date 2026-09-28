@@ -57,6 +57,7 @@ precisa fazer nada além de garantir que ele está habilitado.)
 3. Cole no campo "Manifest URL":
 
 `https://github.com/keitan-lend/chat-history-plus/releases/latest/download/module.json`
+
 4. Clique em "Install".
 5. Ative **Chat History Plus** em **Configurações do Mundo → Gerenciar Módulos**.
 
